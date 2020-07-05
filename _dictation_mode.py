@@ -1,3 +1,29 @@
+"""
+Dictation & command mode Dragonfly grammar
+============================================================================
+
+This module defines a configurable grammar for using three different
+command/dictation modes. The modes can be configured externally by modifying
+the number in the grammar's status file. The modes and associated status
+numbers (0-2) are defined as follows:
+
+ 0. Command-only mode.
+    Only commands will be recognised in this mode. Dictation on its own will
+    not be recognised, at least not by this grammar.
+ 1. Command and dictation mode.
+    Both commands and dictation will be recognised in this mode.
+ 2. Dictation-only mode.
+    Only dictation will be recognised in this mode. This mode sets the
+    grammar as exclusive, so commands defined in other grammars will not be
+    recognised.
+
+It should be noted that this module and grammar is only intended to be used
+with engines such as Kaldi, WSR or CMU Pocket Sphinx that yield lowercase
+text dictation output. It will *not* properly with Dragon's formatted
+dictation and will clash with its built-in modes.
+
+"""
+
 import os
 
 from dragonfly import (Grammar, Choice, Key, Text, FuncContext, IntegerRef,
@@ -5,8 +31,10 @@ from dragonfly import (Grammar, Choice, Key, Text, FuncContext, IntegerRef,
 
 from text_dictation_formatting import WordFormatter, StateFlags
 
+
 class DictationModeGrammar(Grammar):
 
+    # Set the status file path.
     status_file_path = ".dictation-grammar-status.txt"
 
     # Define the initial word formatter state flags.
@@ -18,7 +46,7 @@ class DictationModeGrammar(Grammar):
         Grammar.__init__(self, self.__class__.__name__)
         self._window_stacks = {}
         self._current_window_handle = -1
-        self._dictation_mode_enabled = False  # CHANGE DEFAULT ENABLED STATE HERE
+        self._status = 0  # CHANGE DEFAULT STATE HERE
         self._set_status_from_file()
         self._word_formatter = WordFormatter()
 
@@ -26,17 +54,18 @@ class DictationModeGrammar(Grammar):
         with open(self.status_file_path, 'w+') as f:
             f.write(value)
 
-    def _set_status_from_file(self):
+    def _get_status_from_file(self):
         try:
             with open(self.status_file_path, 'r+') as f:
-                value = True if f.read().strip() == '1' else False
+                return int(f.read().strip())
         except (IOError, OSError):
             self._write_status_to_file('1')
-            value = True
+            return 1
 
-        self._dictation_mode_enabled = value
+    def _set_status_from_file(self):
+        self._status = self._get_status_from_file()
         if self.loaded:
-            self.set_exclusiveness(value)
+            self.set_exclusiveness(self._status == 2)
 
     def _get_window_stack(self):
         handle = self._current_window_handle
@@ -60,7 +89,7 @@ class DictationModeGrammar(Grammar):
 
     def load(self):
         Grammar.load(self)
-        self.set_exclusiveness(self._dictation_mode_enabled)
+        self.set_exclusiveness(self._status == 2)
 
     def _process_begin(self, executable, title, handle):
         self._current_window_handle = handle
@@ -69,16 +98,16 @@ class DictationModeGrammar(Grammar):
         self._set_status_from_file()
 
     @property
-    def dictation_mode_enabled(self):
-        return self._dictation_mode_enabled
+    def status(self):
+        return self._status
 
-    @dictation_mode_enabled.setter
-    def dictation_mode_enabled(self, value):
-        self._dictation_mode_enabled = value
-        file_value = "1" if value else "0"
-        self._write_status_to_file(file_value)
+    @status.setter
+    def status(self, value):
+        value = int(value)
+        self._status = value
+        self._write_status_to_file(str(value))
         if self.loaded:
-            self.set_exclusiveness(value)
+            self.set_exclusiveness(value == 2)
 
     def type_dictated_words(self, words):
         # Set the formatting state for the current window.
@@ -120,16 +149,23 @@ class DictationModeGrammar(Grammar):
 
 # Initialize the grammar here so we can use it to keep track of state.
 grammar = DictationModeGrammar()
-enabled_context = FuncContext(lambda: grammar.dictation_mode_enabled)
-disabled_context = FuncContext(lambda: not grammar.dictation_mode_enabled)
+enabled_context = FuncContext(lambda: grammar.status)
+disabled_context = FuncContext(lambda: not grammar.status)
 
 
 class EnableRule(CompoundRule):
-    context = disabled_context
-    spec = "enable dictation"
+    spec = "enable <mode>"
+    extras = [
+        Choice("mode", {
+            "command [only] mode": 0,
+            "dictation plus command mode": 1,
+            "command plus dictation mode": 1,
+            "dictation [only] mode ": 2,
+        }, default=1)
+    ]
 
     def _process_recognition(self, node, extras):
-        self.grammar.dictation_mode_enabled = True
+        self.grammar.status = extras["mode"]
 
 
 class DisableRule(CompoundRule):
@@ -137,7 +173,7 @@ class DisableRule(CompoundRule):
     spec = "disable dictation"
 
     def _process_recognition(self, node, extras):
-        self.grammar.dictation_mode_enabled = False
+        self.grammar.status = 0
 
 
 class DictationRule(CompoundRule):
@@ -181,7 +217,6 @@ class ScratchAndReplaceRule(CompoundRule):
 
 
 class ResetDictationRule(CompoundRule):
-    context = enabled_context
     spec = "reset dictation [<option>]"
     extras = [
         Choice("option", {
@@ -209,4 +244,3 @@ def unload():
     if grammar:
         grammar.unload()
     grammar = None
-

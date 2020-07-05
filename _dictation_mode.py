@@ -87,6 +87,9 @@ class DictationModeGrammar(Grammar):
         # current window.
         self._word_formatter.state = state.clone()
 
+    def push_window_stack_frame(self, frame):
+        self._get_window_stack().append(frame)
+
     def load(self):
         Grammar.load(self)
         self.set_exclusiveness(self._status == 2)
@@ -176,26 +179,41 @@ class DisableRule(CompoundRule):
         self.grammar.status = 0
 
 
+class DisabledDictationRule(CompoundRule):
+    context = disabled_context
+    spec = "dictation <text>"
+    extras = [Dictation("text", default="")]
+
+    def _process_recognition(self, node, extras):
+        print("\n\n----DICTATION MODE IS DISABLED----\n\n")
+        self.grammar.type_dictated_words(extras["text"].words)
+
+
 class DictationRule(CompoundRule):
     context = enabled_context
-    spec = "[<modifier>] <text>"
+    spec = "[<modifier>] <text> [mimic <mimic_text>]"
     extras = [
         Choice("modifier", {
+            "dictation": (),
             "cap": ("cap",),
             "no space": ("no-space",),
         }, default=()),
-        Dictation("text", default="")
+        Dictation("text", default=""),
+        Dictation("mimic_text", default="")
     ]
 
     def _process_recognition(self, node, extras):
         # Process recognized words.
         words = extras["modifier"] + extras["text"].words
         self.grammar.type_dictated_words(words)
+        mimic_text = extras["mimic_text"].format()
+        if mimic_text:
+            self.grammar.engine.mimic(mimic_text)
 
 
 class ScratchRule(CompoundRule):
     context = enabled_context
-    spec = "scratch [that] [<n>] [times]"
+    spec = "(scratch | scratch that [<n> times])"
     extras = [
         IntegerRef("n", 1, 20, default=1)
     ]
@@ -230,12 +248,30 @@ class ResetDictationRule(CompoundRule):
         self.grammar.clear_formatting_state(option)
 
 
+class StateChangeRule(CompoundRule):
+    context = enabled_context
+    spec = "<state_change>"
+    extras = [
+        Choice("state_change", {
+            "[start] new sentence": ("cap_next", "prev_ended_in_period"),
+            "[start] new paragraph": ("no_space_before", "cap_next", "prev_ended_in_period"),
+        })
+    ]
+
+    def _process_recognition(self, node, extras):
+        # Append the new state flags to the current window's stack using length 0.
+        frame = (0, StateFlags(*extras["state_change"]))
+        self.grammar.push_window_stack_frame(frame)
+
+
 grammar.add_rule(EnableRule())
 grammar.add_rule(DisableRule())
+grammar.add_rule(DisabledDictationRule())
 grammar.add_rule(DictationRule())
 grammar.add_rule(ScratchRule())
 grammar.add_rule(ScratchAndReplaceRule())
 grammar.add_rule(ResetDictationRule())
+grammar.add_rule(StateChangeRule())
 grammar.load()
 
 

@@ -11,18 +11,14 @@ Grammar Command/Dictation Modes
 
 The dictation mode grammar has three command/dictation modes. These modes can be configured externally by modifying the number in the grammar's status file. The modes and associated status numbers (0-2) are defined as follows:
 
- #. Command-only mode (status no. ``0``).
-    Only commands will be recognised in this mode. Dictation on its own will
-    not be recognised, at least not by this grammar.
+#. Command-only mode (status no. ``0``).
+   Only commands will be recognised in this mode. Dictation on its own will not be recognised, at least not by this grammar.
 
- #. Command and dictation mode (status no. ``1``).
-    Both commands and dictation will be recognised in this mode.
+#. Command and dictation mode (status no. ``1``).
+   Both commands and dictation will be recognised in this mode.
 
- #. Dictation-only mode (status no. ``2``).
-    Only dictation will be recognised in this mode. This mode sets the
-    grammar as exclusive, so commands defined in other grammars will not be
-    recognised.
-
+#. Dictation-only mode (status no. ``2``).
+   Only dictation will be recognised in this mode. This mode sets the grammar grammar as exclusive, so commands defined in other grammars will not be recognised.
 
 Setting the Command/Dictation Mode
 ----------------------------------

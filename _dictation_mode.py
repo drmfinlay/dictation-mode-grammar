@@ -19,7 +19,7 @@ numbers (0-2) are defined as follows:
 
 It should be noted that this module and grammar is only intended to be used
 with engines such as Kaldi, WSR or CMU Pocket Sphinx that yield lowercase
-text dictation output. It will *not* properly with Dragon's formatted
+text dictation output. It will *not* work properly with Dragon's formatted
 dictation and will clash with its built-in modes.
 
 """

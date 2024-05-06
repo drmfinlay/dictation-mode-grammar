@@ -254,7 +254,6 @@ class StateChangeRule(CompoundRule):
     extras = [
         Choice("state_change", {
             "[start] new sentence": ("cap_next", "prev_ended_in_period"),
-            "[start] new paragraph": ("no_space_before", "cap_next", "prev_ended_in_period"),
         })
     ]
 
